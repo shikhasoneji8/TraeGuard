@@ -1,0 +1,256 @@
+"""
+Green Privacy - Data Footprint and Eco-Mode Optimization Module
+
+This module calculates the environmental impact of privacy policies through
+data footprint scoring and provides eco-mode optimizations for reduced
+computational overhead.
+"""
+
+import json
+import re
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Union
+
+
+@dataclass
+class GreenPrivacySummary:
+    """Summary of green privacy analysis with optimizations."""
+    data_footprint_score: float  # 0-100 score
+    tier: str  # "Low", "Medium", "High"
+    tier_emoji: str  # 🌱, 🌿, 🌳
+    data_categories_count: int
+    max_retention_days: int
+    third_party_count: int
+    eco_mode_applied: bool
+    optimizations_applied: List[str]
+
+
+class DataFootprintCalculator:
+    """Calculates data footprint scores from policy analysis results."""
+    
+    def __init__(self):
+        self.category_patterns = [
+            r'personal information', r'data', r'cookies', r'location', 
+            r'contact information', r'payment information', r'device information',
+            r'browsing history', r'search queries', r'messages', r'photos',
+            r'videos', r'audio recordings', r'biometric data', r'health data'
+        ]
+        
+        self.retention_patterns = [
+            r'(\d+)\s*days?', r'(\d+)\s*weeks?', r'(\d+)\s*months?', 
+            r'(\d+)\s*years?', r'indefinitely', r'permanently'
+        ]
+        
+        self.third_party_patterns = [
+            r'third.part', r'service providers', r'partners', r'affiliates',
+            r'vendors', r'contractors', r'advertisers', r'analytics'
+        ]
+    
+    def extract_data_categories(self, policy_text: str) -> int:
+        """Extract number of distinct data categories mentioned."""
+        found_categories = set()
+        text_lower = policy_text.lower()
+        
+        for pattern in self.category_patterns:
+            matches = re.findall(pattern, text_lower, re.IGNORECASE)
+            if matches:
+                found_categories.add(pattern)
+        
+        # Additional heuristic: count unique data type mentions
+        data_types = re.findall(r'(\w+)\s+(?:data|information)', text_lower)
+        found_categories.update(data_types)
+        
+        return len(found_categories)
+    
+    def extract_max_retention_days(self, policy_text: str) -> int:
+        """Extract maximum retention duration in days."""
+        text_lower = policy_text.lower()
+        max_days = 0
+        
+        # Pattern matching for duration mentions
+        for pattern in self.retention_patterns:
+            matches = re.findall(pattern, text_lower)
+            for match in matches:
+                if isinstance(match, tuple):
+                    number = int(match[0]) if match[0].isdigit() else 0
+                else:
+                    number = int(match) if match.isdigit() else 0
+                
+                if 'year' in pattern:
+                    number *= 365
+                elif 'month' in pattern:
+                    number *= 30
+                elif 'week' in pattern:
+                    number *= 7
+                elif 'indefinitely' in pattern or 'permanently' in pattern:
+                    number = 3650  # Assume 10 years for indefinite
+                
+                max_days = max(max_days, number)
+        
+        return max_days if max_days > 0 else 365  # Default to 1 year if not specified
+    
+    def extract_third_party_count(self, policy_text: str) -> int:
+        """Extract count of third-party sharing clauses."""
+        text_lower = policy_text.lower()
+        count = 0
+        
+        for pattern in self.third_party_patterns:
+            matches = re.findall(pattern, text_lower, re.IGNORECASE)
+            count += len(matches)
+        
+        # Additional heuristic: count sentences mentioning sharing
+        sentences = re.split(r'[.!?]+', text_lower)
+        sharing_sentences = [s for s in sentences if 'share' in s or 'disclose' in s]
+        count += len(sharing_sentences)
+        
+        return min(count, 20)  # Cap at 20 to avoid excessive weight
+    
+    def calculate_footprint_score(self, data_categories: int, retention_days: int, 
+                                third_party_count: int) -> float:
+        """Calculate data footprint score (0-100)."""
+        # Normalize components to 0-1 range
+        category_score = min(data_categories / 15, 1.0)  # Cap at 15 categories
+        retention_score = min(retention_days / 1825, 1.0)  # Cap at 5 years
+        third_party_score = min(third_party_count / 10, 1.0)  # Cap at 10 mentions
+        
+        # Weighted combination (more categories = higher score)
+        score = (
+            category_score * 0.4 +      # 40% weight on data variety
+            retention_score * 0.35 +    # 35% weight on retention duration
+            third_party_score * 0.25    # 25% weight on third-party sharing
+        ) * 100
+        
+        return round(score, 2)
+    
+    def map_score_to_tier(self, score: float) -> tuple[str, str]:
+        """Map score to tier and emoji."""
+        if score <= 33:
+            return "Low", "🌱"
+        elif score <= 66:
+            return "Medium", "🌿"
+        else:
+            return "High", "🌳"
+
+
+class EcoModeOptimizer:
+    """Provides eco-mode optimizations for reduced computational overhead."""
+    
+    def __init__(self):
+        self.optimizations = {
+            'adversarial_variants': {
+                'normal': ['paraphrased', 'negation_flipped', 'ambiguous', 'entity_swapped'],
+                'eco': ['paraphrased', 'ambiguous']  # Skip negation and entity swapping
+            },
+            'cross_model_comparison': {
+                'normal': True,
+                'eco': False  # Skip heavy cross-model comparison
+            },
+            'explanation_depth': {
+                'normal': 'detailed',
+                'eco': 'brief'  # Use simpler explanations
+            },
+            'sample_size': {
+                'normal': 1.0,  # Full sample
+                'eco': 0.5    # 50% sample size
+            }
+        }
+    
+    def get_optimizations(self, eco_mode: bool) -> Dict[str, any]:
+        """Get optimization settings for eco mode."""
+        mode = 'eco' if eco_mode else 'normal'
+        applied_optimizations = []
+        
+        if eco_mode:
+            applied_optimizations.extend([
+                "Reduced adversarial variant generation",
+                "Skipped cross-model comparison",
+                "Simplified explanations",
+                "Reduced sample size"
+            ])
+        
+        return {
+            'adversarial_variants': self.optimizations['adversarial_variants'][mode],
+            'cross_model_comparison': self.optimizations['cross_model_comparison'][mode],
+            'explanation_depth': self.optimizations['explanation_depth'][mode],
+            'sample_size': self.optimizations['sample_size'][mode],
+            'optimizations_applied': applied_optimizations
+        }
+
+
+def analyze_policy_footprint(policy_analysis: Union[Dict, str], 
+                           eco_mode: bool = False) -> GreenPrivacySummary:
+    """
+    Analyze policy data footprint and apply eco-mode optimizations.
+    
+    Args:
+        policy_analysis: Either policy text string or analysis results dict
+        eco_mode: Whether to apply eco-mode optimizations
+    
+    Returns:
+        GreenPrivacySummary with footprint analysis
+    """
+    calculator = DataFootprintCalculator()
+    optimizer = EcoModeOptimizer()
+    
+    # Extract policy text from analysis results or use directly
+    if isinstance(policy_analysis, dict):
+        policy_text = policy_analysis.get('full_text', '')
+        clauses = policy_analysis.get('clauses', [])
+        
+        # If we have structured analysis, use it for more accurate extraction
+        if clauses:
+            # Count data categories from clause analysis
+            data_categories = len(set(
+                clause.get('data_types', []) for clause in clauses
+            ))
+            
+            # Extract retention from structured data
+            retention_days = max([
+                clause.get('retention_days', 365) for clause in clauses
+            ]) if clauses else 365
+            
+            # Count third-party mentions
+            third_party_count = sum([
+                1 for clause in clauses 
+                if 'third' in clause.get('text', '').lower() or 
+                   'share' in clause.get('text', '').lower()
+            ])
+        else:
+            # Fall back to text analysis
+            data_categories = calculator.extract_data_categories(policy_text)
+            retention_days = calculator.extract_max_retention_days(policy_text)
+            third_party_count = calculator.extract_third_party_count(policy_text)
+    else:
+        # Direct text analysis
+        policy_text = policy_analysis
+        data_categories = calculator.extract_data_categories(policy_text)
+        retention_days = calculator.extract_max_retention_days(policy_text)
+        third_party_count = calculator.extract_third_party_count(policy_text)
+    
+    # Calculate footprint score
+    footprint_score = calculator.calculate_footprint_score(
+        data_categories, retention_days, third_party_count
+    )
+    
+    # Map to tier
+    tier, emoji = calculator.map_score_to_tier(footprint_score)
+    
+    # Get eco-mode optimizations
+    optimizations = optimizer.get_optimizations(eco_mode)
+    
+    return GreenPrivacySummary(
+        data_footprint_score=footprint_score,
+        tier=tier,
+        tier_emoji=emoji,
+        data_categories_count=data_categories,
+        max_retention_days=retention_days,
+        third_party_count=third_party_count,
+        eco_mode_applied=eco_mode,
+        optimizations_applied=optimizations['optimizations_applied']
+    )
+
+
+def get_eco_mode_settings(eco_mode: bool) -> Dict[str, any]:
+    """Get current eco-mode settings for other modules."""
+    optimizer = EcoModeOptimizer()
+    return optimizer.get_optimizations(eco_mode)
