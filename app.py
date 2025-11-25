@@ -79,6 +79,8 @@ with st.sidebar:
     ctx = st.selectbox('User context', ['general','children','elderly','job_seeker','healthcare_patient','financial_customer'], index=0)
     theme_choice = st.selectbox('Theme', ['Light','Dark'], index=0)
     eco_mode = st.checkbox('Eco mode', value=False)
+    persona = st.selectbox('Persona', ['General user','Parent','Senior','Job seeker','Patient','Financial customer'], index=0)
+    focus_area = st.selectbox('Focus area', ['Data collection','Data sharing','Retention','Tracking','Security','Consent'], index=0)
 
 if theme_choice == 'Dark':
     st.markdown(
@@ -87,20 +89,55 @@ if theme_choice == 'Dark':
         .stApp { background-color: #0e1117; color: #fafafa; }
         .stMarkdown, .stText, .stDataFrame, .stMetric { color: #fafafa; }
         div[data-testid="stMetricDelta"] { color: #fafafa; }
+        .stTabs [role="tablist"] button { color: #fafafa; }
+        .stButton>button { background-color: #31364a; color: #fafafa; }
+        .stSelectbox label, .stTextArea label { color: #fafafa; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 policy = st.text_area('Paste privacy policy text', height=240)
-tabs = st.tabs(['Analyze','Green Footprint','Reliability','About'])
+tabs = st.tabs(['Analyze AI','Reliability Lab','RAI Studio','Green Footprint'])
 
 with tabs[0]:
+    st.write('Analyze clauses for risk, severity, and category. Copy or rewrite the policy text.')
+    cta1, cta2 = st.columns(2)
+    with cta1:
+        if st.button('Copy Full Text'):
+            st.code(policy or '', language='text')
+    with cta2:
+        if st.button('Rewrite with PlainText Panda'):
+            def simplify_text(txt: str) -> str:
+                txt = re.sub(r'\\butilize\\b','use',txt, flags=re.IGNORECASE)
+                txt = re.sub(r'\\bretain\\b','keep',txt, flags=re.IGNORECASE)
+                txt = re.sub(r'\\bdisclose\\b','share',txt, flags=re.IGNORECASE)
+                txt = re.sub(r'\\bthird\\s+part(y|ies)\\b','other companies',txt, flags=re.IGNORECASE)
+                txt = re.sub(r'\\bprior to\\b','before',txt, flags=re.IGNORECASE)
+                txt = re.sub(r'\\bsubsequent\\b','after',txt, flags=re.IGNORECASE)
+                return txt
+            rewritten = simplify_text(policy or '')
+            st.text_area('PlainText Panda Output', rewritten, height=200)
     if st.button('Analyze'):
         clauses = analyze_policy(policy)
-        df = pd.DataFrame(clauses)
+        def severity(r: float) -> str:
+            return 'High' if r > 0.7 else ('Medium' if r > 0.4 else 'Low')
+        df = pd.DataFrame([
+            {
+                'id': c['id'],
+                'category': c['label'],
+                'risk_score': c['risk_score'],
+                'severity': severity(c['risk_score']),
+                'text': c['text']
+            }
+            for c in clauses
+        ])
         st.subheader('Detected Clauses')
-        st.dataframe(df[['id','label','risk_score','text']], use_container_width=True)
+        st.dataframe(df[['id','category','severity','risk_score']], use_container_width=True)
+        st.subheader('Clause Details')
+        for c in clauses:
+            with st.expander(f"{c['id']} • {c['label']} • risk={c['risk_score']:.2f}"):
+                st.write(c['text'])
         overview, themes, summary = generate_report(clauses, ctx)
         st.subheader('Overview')
         col1, col2, col3 = st.columns(3)
@@ -114,25 +151,10 @@ with tabs[0]:
         st.write(summary)
 
 with tabs[1]:
-    st.write('Estimate environmental footprint and third-party exposure from the policy.')
-    if st.button('Calculate Footprint'):
-        if policy.strip():
-            summary = analyze_policy_footprint(policy, eco_mode)
-            col1, col2, col3 = st.columns(3)
-            col1.metric('Footprint Score', summary.data_footprint_score)
-            col2.metric('Tier', summary.tier)
-            col3.metric('Retention (days)', summary.max_retention_days)
-            st.write(f"Data categories: {summary.data_categories_count}")
-            st.write(f"Third-party mentions: {summary.third_party_count}")
-            if eco_mode and summary.optimizations_applied:
-                st.write('Optimizations applied:')
-                for opt in summary.optimizations_applied:
-                    st.write(f'- {opt}')
-        else:
-            st.write('Enter policy text above to calculate footprint.')
+    st.write('Run reliability tests: Output Stability, Risk Drift, and Red-Flag Hallucination.')
 
-with tabs[2]:
-    st.write('Test how clause classification behaves under simple text variations.')
+with tabs[1]:
+    st.write('Run reliability tests: Output Stability, Risk Drift, and Red-Flag Hallucination.')
     def _paraphrase_clause(text: str) -> str:
         replacements = {
             'collect': ['gather','acquire'],
@@ -157,7 +179,7 @@ with tabs[2]:
         tl = re.sub(r'\b\d+\s+months?\b', 'some months', tl, flags=re.IGNORECASE)
         tl = re.sub(r'\b\d+\s+years?\b', 'some years', tl, flags=re.IGNORECASE)
         return tl
-    if st.button('Run Reliability'):
+    if st.button('Run Reliability Tests'):
         if not policy.strip():
             st.write('Enter policy text above to run reliability tests.')
         else:
@@ -186,16 +208,81 @@ with tabs[2]:
                 }
                 variants_metrics.append(metrics)
             dfm = pd.DataFrame(variants_metrics)
-            st.subheader('Variant Stability Metrics')
+            st.subheader('Risk Drift Test')
             st.dataframe(dfm, use_container_width=True)
             avg_drift = dfm[['paraphrase_drift','negation_drift','ambiguous_drift']].mean().mean()
-            label_stab = dfm[[
-                'label_stability_paraphrase','label_stability_negation','label_stability_ambiguous'
-            ]].mean().mean()
-            c1,c2 = st.columns(2)
+            label_stab = dfm[['label_stability_paraphrase','label_stability_negation','label_stability_ambiguous']].mean().mean()
+            c1,c2,c3 = st.columns(3)
             c1.metric('Avg risk drift', f"{avg_drift:.2f}")
             c2.metric('Avg label stability', f"{label_stab:.2f}")
+            rerun1 = analyze_policy(policy)
+            rerun2 = analyze_policy(policy)
+            stability = sum(1 for i in range(min(len(rerun1), len(rerun2))) if rerun1[i]['label']==rerun2[i]['label'])/max(len(rerun1),1)
+            c3.metric('Label consistency', f"{stability:.2f}")
+            st.subheader('Red-Flag Hallucination Test')
+            red_flags = ['sell data','share without consent','collect sensitive','track location continually','retain indefinitely']
+            text_lower = (policy or '').lower()
+            flag_hits = sum(1 for rf in red_flags if rf in text_lower)
+            st.write(f"Detected red-flag phrases: {flag_hits}")
+            st.write('Counts potentially harmful statements present in text. Review manually for context.')
+
+with tabs[2]:
+    st.write('Generate user-centered explanations tailored to personas and focus areas.')
+    if st.button('Generate Explanations'):
+        if not policy.strip():
+            st.write('Enter policy text above to generate explanations.')
+        else:
+            clauses = analyze_policy(policy)
+            st.subheader(f'Persona: {persona} • Focus: {focus_area}')
+            for c in clauses:
+                with st.expander(f"{c['id']} • {c['label']} • risk={c['risk_score']:.2f}"):
+                    msg = ''
+                    if focus_area == 'Data collection':
+                        msg = 'This section describes what data is collected and why.'
+                        if c['label']=='data_collection':
+                            msg += ' Consider limiting collection to essentials for your needs.'
+                    elif focus_area == 'Data sharing':
+                        msg = 'This tells who your data may be shared with.'
+                        if c['label']=='data_sharing':
+                            msg += ' Ask for opt-out or clear partner lists.'
+                    elif focus_area == 'Retention':
+                        msg = 'How long your data is kept.'
+                        if c['label']=='data_retention':
+                            msg += ' Prefer shorter retention or deletion options.'
+                    elif focus_area == 'Tracking':
+                        msg = 'Tracking relates to cookies and behavioral monitoring.'
+                        if c['label']=='tracking':
+                            msg += ' Consider disabling tracking in settings.'
+                    else:
+                        msg = 'General privacy guidance.'
+                    st.write(msg)
+                    st.write('For ', persona, ': ', 'Try to review settings, request copies or deletion, and contact support for privacy queries.')
 
 with tabs[3]:
-    st.write('TraeGuard helps analyze privacy policies for risk, sharing, retention, reliability, and green footprint.')
-    st.write('Use Analyze to classify clauses, Green Footprint to estimate environmental impact, and Reliability to test robustness.')
+    st.write('Estimate environmental footprint, categories, and third-party exposure from the policy.')
+    if st.button('Compute Data Footprint'):
+        if policy.strip():
+            summary = analyze_policy_footprint(policy, eco_mode)
+            col1, col2, col3 = st.columns(3)
+            col1.metric('Footprint Score', summary.data_footprint_score)
+            col2.metric('Tier', summary.tier)
+            col3.metric('Retention (days)', summary.max_retention_days)
+            st.write(f"Data categories (estimated): {summary.data_categories_count}")
+            st.write(f"Third-party mentions (estimated): {summary.third_party_count}")
+            if eco_mode and summary.optimizations_applied:
+                st.write('Optimizations applied:')
+                for opt in summary.optimizations_applied:
+                    st.write(f'- {opt}')
+        else:
+            st.write('Enter policy text above to calculate footprint.')
+    st.subheader('Definitions')
+    with st.expander('What is data footprint?'):
+        st.write('A combined score estimating breadth of data collected, retention duration, and third-party sharing.')
+    with st.expander('Sustainability metrics used'):
+        st.write('- Data variety (categories)')
+        st.write('- Retention duration')
+        st.write('- Third-party sharing mentions')
+    st.subheader('Recommendations')
+    st.write('- Reduce data categories collected')
+    st.write('- Shorten retention periods')
+    st.write('- Limit sharing to necessary partners')
