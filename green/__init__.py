@@ -2,8 +2,25 @@
 Green Privacy: Environmental impact assessment and eco optimization for privacy analysis
 """
 
-from . import footprint
-from . import carbon
-from . import eco_mode
+# Import only available submodules to avoid deployment errors
+try:
+    from . import footprint
+except Exception:
+    footprint = None
 
-__all__ = ["footprint", "carbon", "eco_mode"]
+# Optional modules (may not exist in minimal deployments)
+try:
+    from . import carbon
+except Exception:
+    carbon = None
+
+try:
+    from . import eco_mode
+except Exception:
+    eco_mode = None
+
+__all__ = [name for name, mod in {
+    "footprint": footprint,
+    "carbon": carbon,
+    "eco_mode": eco_mode
+}.items() if mod is not None]
