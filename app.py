@@ -5,6 +5,14 @@ from green.footprint import analyze_policy_footprint
 import re
 import random
 
+# Prefer enhanced TraeGuard app if available
+try:
+    from app_traeguard_enhanced import main as trae_main
+    trae_main()
+    st.stop()
+except Exception:
+    pass
+
 def analyze_policy(policy_text: str):
     clauses = [c.strip() for c in policy_text.split('.') if c.strip()]
     results = []
