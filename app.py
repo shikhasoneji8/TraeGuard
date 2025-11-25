@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from green.footprint import analyze_policy_footprint
 
 def analyze_policy(policy_text: str):
     clauses = [c.strip() for c in policy_text.split('.') if c.strip()]
@@ -74,21 +75,61 @@ st.title('TraeGuard – Privacy Policy Analysis')
 with st.sidebar:
     st.header('Settings')
     ctx = st.selectbox('User context', ['general','children','elderly','job_seeker','healthcare_patient','financial_customer'], index=0)
+    theme_choice = st.selectbox('Theme', ['Light','Dark'], index=0)
+    eco_mode = st.checkbox('Eco mode', value=False)
+
+if theme_choice == 'Dark':
+    st.markdown(
+        """
+        <style>
+        .stApp { background-color: #0e1117; color: #fafafa; }
+        .stMarkdown, .stText, .stDataFrame, .stMetric { color: #fafafa; }
+        div[data-testid="stMetricDelta"] { color: #fafafa; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 policy = st.text_area('Paste privacy policy text', height=240)
-if st.button('Analyze'):
-    clauses = analyze_policy(policy)
-    df = pd.DataFrame(clauses)
-    st.subheader('Detected Clauses')
-    st.dataframe(df[['id','label','risk_score','text']], use_container_width=True)
-    overview, themes, summary = generate_report(clauses, ctx)
-    st.subheader('Overview')
-    col1, col2, col3 = st.columns(3)
-    col1.metric('Total Clauses', overview['total_clauses'])
-    col2.metric('High Risk', overview['high_risk_clauses'])
-    col3.metric('Medium Risk', overview['medium_risk_clauses'])
-    st.subheader('Key Themes')
-    for t in themes:
-        st.write(f'- {t}')
-    st.subheader('Summary')
-    st.write(summary)
+tabs = st.tabs(['Analyze','Green Footprint','Reliability','About'])
+
+with tabs[0]:
+    if st.button('Analyze'):
+        clauses = analyze_policy(policy)
+        df = pd.DataFrame(clauses)
+        st.subheader('Detected Clauses')
+        st.dataframe(df[['id','label','risk_score','text']], use_container_width=True)
+        overview, themes, summary = generate_report(clauses, ctx)
+        st.subheader('Overview')
+        col1, col2, col3 = st.columns(3)
+        col1.metric('Total Clauses', overview['total_clauses'])
+        col2.metric('High Risk', overview['high_risk_clauses'])
+        col3.metric('Medium Risk', overview['medium_risk_clauses'])
+        st.subheader('Key Themes')
+        for t in themes:
+            st.write(f'- {t}')
+        st.subheader('Summary')
+        st.write(summary)
+
+with tabs[1]:
+    if st.button('Calculate Footprint'):
+        if policy.strip():
+            summary = analyze_policy_footprint(policy, eco_mode)
+            col1, col2, col3 = st.columns(3)
+            col1.metric('Footprint Score', summary.data_footprint_score)
+            col2.metric('Tier', summary.tier)
+            col3.metric('Retention (days)', summary.max_retention_days)
+            st.write(f"Data categories: {summary.data_categories_count}")
+            st.write(f"Third-party mentions: {summary.third_party_count}")
+            if eco_mode and summary.optimizations_applied:
+                st.write('Optimizations applied:')
+                for opt in summary.optimizations_applied:
+                    st.write(f'- {opt}')
+        else:
+            st.write('Enter policy text above to calculate footprint.')
+
+with tabs[2]:
+    st.write('Reliability analysis coming soon.')
+
+with tabs[3]:
+    st.write('TraeGuard helps analyze privacy policies for risk, sharing, retention, and footprint.')
