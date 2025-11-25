@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from green.footprint import analyze_policy_footprint
+import re
+import random
 
 def analyze_policy(policy_text: str):
     clauses = [c.strip() for c in policy_text.split('.') if c.strip()]
@@ -112,6 +114,7 @@ with tabs[0]:
         st.write(summary)
 
 with tabs[1]:
+    st.write('Estimate environmental footprint and third-party exposure from the policy.')
     if st.button('Calculate Footprint'):
         if policy.strip():
             summary = analyze_policy_footprint(policy, eco_mode)
@@ -129,7 +132,70 @@ with tabs[1]:
             st.write('Enter policy text above to calculate footprint.')
 
 with tabs[2]:
-    st.write('Reliability analysis coming soon.')
+    st.write('Test how clause classification behaves under simple text variations.')
+    def _paraphrase_clause(text: str) -> str:
+        replacements = {
+            'collect': ['gather','acquire'],
+            'share': ['disclose','provide'],
+            'retain': ['store','keep'],
+            'sell': ['trade','monetize'],
+            'track': ['monitor','observe']
+        }
+        tl = text.lower()
+        for k, vals in replacements.items():
+            if k in tl:
+                rep = random.choice(vals)
+                tl = tl.replace(k, rep)
+        return tl
+    def _negate_clause(text: str) -> str:
+        tl = text
+        tl = re.sub(r'\bwill\b', 'will not', tl, flags=re.IGNORECASE)
+        tl = re.sub(r'\bmay\b', 'may not', tl, flags=re.IGNORECASE)
+        return tl
+    def _ambiguous_clause(text: str) -> str:
+        tl = re.sub(r'\b\d+\s+days?\b', 'a reasonable period', text, flags=re.IGNORECASE)
+        tl = re.sub(r'\b\d+\s+months?\b', 'some months', tl, flags=re.IGNORECASE)
+        tl = re.sub(r'\b\d+\s+years?\b', 'some years', tl, flags=re.IGNORECASE)
+        return tl
+    if st.button('Run Reliability'):
+        if not policy.strip():
+            st.write('Enter policy text above to run reliability tests.')
+        else:
+            clauses = analyze_policy(policy)
+            variants_metrics = []
+            for c in clauses[:10]:
+                base = c
+                p_var = _paraphrase_clause(c['text'])
+                n_var = _negate_clause(c['text'])
+                a_var = _ambiguous_clause(c['text'])
+                res_p = analyze_policy(p_var)[0]
+                res_n = analyze_policy(n_var)[0]
+                res_a = analyze_policy(a_var)[0]
+                def drift(v):
+                    return abs(v['risk_score'] - base['risk_score']) / max(base['risk_score'], 1.0)
+                metrics = {
+                    'id': base['id'],
+                    'label': base['label'],
+                    'risk': base['risk_score'],
+                    'paraphrase_drift': drift(res_p),
+                    'negation_drift': drift(res_n),
+                    'ambiguous_drift': drift(res_a),
+                    'label_stability_paraphrase': int(res_p['label'] == base['label']),
+                    'label_stability_negation': int(res_n['label'] == base['label']),
+                    'label_stability_ambiguous': int(res_a['label'] == base['label'])
+                }
+                variants_metrics.append(metrics)
+            dfm = pd.DataFrame(variants_metrics)
+            st.subheader('Variant Stability Metrics')
+            st.dataframe(dfm, use_container_width=True)
+            avg_drift = dfm[['paraphrase_drift','negation_drift','ambiguous_drift']].mean().mean()
+            label_stab = dfm[[
+                'label_stability_paraphrase','label_stability_negation','label_stability_ambiguous'
+            ]].mean().mean()
+            c1,c2 = st.columns(2)
+            c1.metric('Avg risk drift', f"{avg_drift:.2f}")
+            c2.metric('Avg label stability', f"{label_stab:.2f}")
 
 with tabs[3]:
-    st.write('TraeGuard helps analyze privacy policies for risk, sharing, retention, and footprint.')
+    st.write('TraeGuard helps analyze privacy policies for risk, sharing, retention, reliability, and green footprint.')
+    st.write('Use Analyze to classify clauses, Green Footprint to estimate environmental impact, and Reliability to test robustness.')
