@@ -260,6 +260,22 @@ with tabs[2]:
 
 with tabs[3]:
     st.write('Estimate environmental footprint, categories, and third-party exposure from the policy.')
+    def _list_data_categories(text: str) -> list:
+        patterns = [
+            r'personal information', r'data', r'cookies', r'location', 
+            r'contact information', r'payment information', r'device information',
+            r'browsing history', r'search queries', r'messages', r'photos',
+            r'videos', r'audio recordings', r'biometric data', r'health data'
+        ]
+        found = set()
+        tl = text.lower()
+        for p in patterns:
+            if re.search(p, tl, re.IGNORECASE):
+                found.add(p)
+        types = re.findall(r'(\w+)\s+(?:data|information)', tl)
+        found.update(types)
+        return sorted(found)
+
     if st.button('Compute Data Footprint'):
         if policy.strip():
             summary = analyze_policy_footprint(policy, eco_mode)
@@ -267,7 +283,11 @@ with tabs[3]:
             col1.metric('Footprint Score', summary.data_footprint_score)
             col2.metric('Tier', summary.tier)
             col3.metric('Retention (days)', summary.max_retention_days)
+            cats = _list_data_categories(policy)
             st.write(f"Data categories (estimated): {summary.data_categories_count}")
+            if cats:
+                st.write('Categories detected:')
+                st.write(', '.join(cats))
             st.write(f"Third-party mentions (estimated): {summary.third_party_count}")
             if eco_mode and summary.optimizations_applied:
                 st.write('Optimizations applied:')
