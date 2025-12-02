@@ -1209,13 +1209,13 @@ applications, advertisers, analytics providers, and business partners.
             st.session_state.sample_policy = sample_policies[selected_sample]
     
     # Main content area with tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Analyze", "🛡️ Recommendations", "🔬 Reliability Lab", "💡 RAI Studio", "🌱 Green Privacy"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Analyze", "🧭 Privacy Coach", "🔬 Reliability Lab", "💡 RAI Studio", "🌱 Green Privacy"])
     
     with tab1:
         render_analyze_tab()
     
     with tab2:
-        render_recommendations_tab()
+        render_privacy_coach_tab()
     
     with tab3:
         render_reliability_tab()
@@ -1705,95 +1705,37 @@ def render_rai_tab():
                     st.code(report['markdown'], language="markdown")
                     st.success("Report copied to clipboard!")
 
-def render_recommendations_tab():
-    st.header("🛡️ User Recommendations")
+def render_privacy_coach_tab():
+    st.header("🧭 Privacy Coach")
     if not st.session_state.analysis_results:
         st.warning("Please analyze a policy first in the Analyze tab.")
         return
-    clauses = st.session_state.analysis_results.get('clauses', [])
-    texts = [c.get('text', '') for c in clauses]
-    combined = " ".join(texts).lower()
-    labels = [c.get('label', '') for c in clauses]
-    suggestions = []
-    def add(t, a):
-        suggestions.append({"title": t, "action": a})
-    import re
-    url_matches = re.findall(r'(https?://[^\s)"<>]+|www\.[^\s)"<>]+)', " ".join(texts))
-    email_matches = re.findall(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', " ".join(texts))
-    phone_matches = re.findall(r'\+?\d[\d\-\s\(\)]{7,}', " ".join(texts))
-    domain = None
-    if url_matches:
-        try:
-            import urllib.parse
-            u0 = url_matches[0]
-            if not u0.startswith('http'):
-                u0 = 'http://' + u0
-            domain = urllib.parse.urlparse(u0).netloc
-        except Exception:
-            domain = None
-    elif email_matches:
-        try:
-            domain = email_matches[0].split('@')[1]
-        except Exception:
-            domain = None
-    if domain:
-        st.caption(f"Website detected: {domain}")
-    def classify_url(u):
-        lu = u.lower()
-        if 'do-not-sell' in lu or 'donotsell' in lu or 'do_not_sell' in lu:
-            return 'Do Not Sell or Share'
-        if 'opt-out' in lu or 'optout' in lu or 'unsubscribe' in lu:
-            return 'Opt out of marketing/data sharing'
-        if 'cookie' in lu or 'consent' in lu or 'preferences' in lu:
-            return 'Adjust cookie preferences'
-        if ('privacy' in lu) and ('request' in lu or 'portal' in lu or 'rights' in lu or 'dsar' in lu or 'access' in lu or 'delete' in lu or 'erasure' in lu):
-            return 'Submit privacy request'
-        if 'delete' in lu and 'account' in lu:
-            return 'Delete or close account'
-        return None
-    for u in url_matches:
-        title = classify_url(u)
-        if title:
-            add(title, f"Visit {u}")
-    for e in set(email_matches):
-        el = e.lower()
-        if any(k in el for k in ['privacy','dpo','data']):
-            add('Contact privacy team', f"Email {e}")
-        else:
-            add('Contact support', f"Email {e}")
-    for p in set(phone_matches):
-        add('Call support', f"Phone {p}")
-    if any(l == 'data_sharing' for l in labels) or ('share' in combined or 'third party' in combined):
-        add("Opt out of data sharing", "Use account privacy settings or preference center to disable partner sharing")
-        add("Do Not Sell or Share", "Use the website's 'Do Not Sell or Share My Personal Information' link if available")
-        add("Limit personalized ads", "Turn off targeted advertising in settings and on major ad platforms")
-    if any(l == 'data_collection' for l in labels) or ('collect' in combined):
-        add("Limit optional fields", "Provide only required information; skip phone, location, or demographics where optional")
-        add("Disable precise location", "Turn off location permissions in account and device settings")
-    if any(l == 'tracking' for l in labels) or ('cookie' in combined or 'track' in combined or 'analytics' in combined):
-        add("Adjust cookie settings", "Open cookie banner/settings and select 'Essential only'")
-        add("Enable Global Privacy Control", "Turn on GPC in your browser to signal opt-out across sites")
-        add("Limit cross-site tracking", "Use browser tracking protection and disable third-party cookies")
-    if any(l == 'data_retention' for l in labels) or ('retain' in combined or 'store' in combined):
-        add("Request data deletion", "Submit a deletion request via the privacy portal or support")
-        add("Schedule account cleanup", "Close unused accounts and remove old backups or uploads")
-    if ('unsubscribe' in combined or 'marketing' in combined or 'communications' in combined or 'email' in combined):
-        add("Opt out of marketing", "Use email footer links or account preferences to unsubscribe from communications")
-    if ('biometric' in combined):
-        add("Avoid sharing biometrics", "Skip biometric uploads; request removal if already provided")
-    add("Review privacy settings", "Visit account privacy page to disable sharing, tracking, and personalization")
-    add("Use privacy request portal", "Submit access/copy and deletion requests where offered")
-    add("Revoke third-party app access", "Disconnect apps and integrations you no longer use")
-    dedup = {}
-    for s in suggestions:
-        dedup[s["title"]] = s
-    final = list(dedup.values())
-    st.subheader("Suggested Actions")
-    for s in final:
-        st.write(f"- {s['title']}: {s['action']}")
-    if st.button("Copy Suggestions"):
-        text = "\n".join([f"- {s['title']}: {s['action']}" for s in final])
-        st.code(text)
+    from suggestions.privacy_coach import generate_privacy_coach
+    site_hint = None
+    green_metrics = None
+    if 'green_results' in st.session_state and st.session_state.green_results:
+        gr = st.session_state.green_results
+        green_metrics = {
+            'data_categories_count': getattr(gr, 'data_categories_count', None),
+            'max_retention_days': getattr(gr, 'max_retention_days', None),
+            'third_party_count': getattr(gr, 'third_party_count', None),
+            'tier': getattr(gr, 'tier', None)
+        }
+    if st.button("🧠 Generate Privacy Suggestions", type="primary"):
+        with st.spinner("Generating site-specific suggestions..."):
+            result = generate_privacy_coach(st.session_state.analysis_results, site_hint, green_metrics)
+            if result.get('site'):
+                st.caption(f"Website detected: {result['site']}")
+            st.subheader("Top Risks")
+            risks = result.get('top_risks', [])
+            if risks:
+                st.write(", ".join(risks))
+            st.subheader("Recommended Actions")
+            suggestions = result.get('suggestions', [])
+            for s in suggestions:
+                cat = s.get('category','general')
+                icon = '🔍' if cat=='tracking' else '🔗' if cat=='sharing' else '🕒' if cat=='retention' else '📥' if cat=='collection' else '⚠️' if cat=='sensitive' else '✅'
+                st.write(f"- {icon} {s.get('text','')}")
 
 def render_green_tab():
     """Render the Green Privacy tab with enhanced metrics and tooltips."""
