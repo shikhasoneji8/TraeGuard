@@ -1734,8 +1734,11 @@ def render_privacy_coach_tab():
             suggestions = result.get('suggestions', [])
             for s in suggestions:
                 cat = s.get('category','general')
-                icon = '🔍' if cat=='tracking' else '🔗' if cat=='sharing' else '🕒' if cat=='retention' else '📥' if cat=='collection' else '⚠️' if cat=='sensitive' else '✅'
+                icon = '🔍' if cat in ['tracking'] else '🔗' if cat in ['data_sharing','third_party_sharing'] else '🕒' if cat in ['data_retention','long_term_retention'] else '📥' if cat in ['data_collection','collection'] else '⚠️' if cat in ['sensitive','sensitive_collection','unclear_wording','invasive_permissions'] else '✅'
                 st.write(f"- {icon} {s.get('text','')}")
+                ev = s.get('evidence')
+                if ev:
+                    st.caption(f"Because the policy says: \"{ev}\"")
 
 def render_green_tab():
     """Render the Green Privacy tab with enhanced metrics and tooltips."""
